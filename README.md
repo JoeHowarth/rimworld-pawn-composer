@@ -7,6 +7,7 @@ Highlights
 - Layering tuned for humanlike pawns
 - Per-layer offsets with sensible defaults and sweep grids for calibration
 - Variable-size frames to prevent clipping (e.g., tall hats)
+-. Skin tone control applies to both head and body
 
 Install (uv)
 1) Install uv: https://docs.astral.sh/uv/
@@ -39,6 +40,7 @@ uv run rwpawn-preview \
   --body-type Female \
   --head Female_Average_Normal \
   --hair Bowlcut \
+  --color-skin "239,208,175" \
   --eyes GrayEyes \
   --apparel ShirtButton \
   --apparel Jacket \
@@ -95,8 +97,11 @@ uv run rwpawn-preview \
   --canvas-offset-south 0,10 \
   --out preview_examples/south_canvas_shift.png
 
+Colors
+- --color-skin applies to both head and body (use either #RRGGBB or R,G,B)
+- Per-category overrides also supported: --color-hair, --color-headgear, --color-pants, --color-shirt, --color-outer, --color-belt, --color-apparel
+
 Tips / Troubleshooting
 - Don’t split the assets path across lines; keep `--assets-root` on a single line inside quotes.
 - When passing negative ranges to grid flags, use the equals form: `--grid-head=-2:2:1,-10:2:2`.
 - The assets folder is not tracked in Git; point `--assets-root` at your local copy.
-
