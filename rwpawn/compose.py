@@ -65,9 +65,8 @@ def compose_preview(
         "north": (0, 0),
         "east": (0, 0),
     }
-    # Hat slightly higher on south; bump by +2 from prior -10 to -8
     default_headgear_offsets_rel: Dict[str, Tuple[int, int]] = {
-        "south": (0, -8),
+        "south": (0, -5),
         "north": (0, 0),
         "east": (0, 0),
     }
@@ -119,9 +118,9 @@ def compose_preview(
         if body:
             if body_offsets and d in body_offsets:
                 ox, oy = body_offsets[d]
-                place(body, cx + ox, cy + oy)
+                place(apply_color(body, get_color("body")), cx + ox, cy + oy)
             else:
-                place(body, cx, cy)
+                place(apply_color(body, get_color("body")), cx, cy)
 
         buckets = collect_apparel_images(assets_root, apparels, body_type, d)
 

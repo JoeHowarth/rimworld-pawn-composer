@@ -107,6 +107,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--color-hair", default=None, help="Hair color (#RRGGBB or R,G,B)")
     p.add_argument("--color-beard", default=None, help="Beard color (#RRGGBB or R,G,B)")
     p.add_argument("--color-headgear", default=None, help="Headgear color (#RRGGBB or R,G,B)")
+    p.add_argument("--color-body", default=None, help="Body/skin color (#RRGGBB or R,G,B)")
     p.add_argument("--color-pants", default=None, help="Pants color (#RRGGBB or R,G,B)")
     p.add_argument("--color-shirt", default=None, help="Shirt color (#RRGGBB or R,G,B)")
     p.add_argument("--color-outer", default=None, help="Outerwear color (#RRGGBB or R,G,B)")
@@ -168,6 +169,7 @@ def main() -> None:
         "hair": (59, 42, 31),
         "beard": (59, 42, 31),
         "headgear": (194, 168, 120),
+        "body": (239, 208, 175),
         "pants": (58, 74, 90),
         "shirt": (159, 211, 242),
         "outer": (47, 62, 92),
@@ -179,6 +181,8 @@ def main() -> None:
         colors["beard"] = _parse_color(args.color_beard)
     if args.color_headgear:
         colors["headgear"] = _parse_color(args.color_headgear)
+    if args.color_body:
+        colors["body"] = _parse_color(args.color_body)
     if args.color_pants:
         colors["pants"] = _parse_color(args.color_pants)
     if args.color_shirt:
