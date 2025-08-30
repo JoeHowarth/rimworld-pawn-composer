@@ -43,6 +43,33 @@ def _parse_range(spec: str) -> list[int]:
     return vals
 
 
+def _parse_color(val: str) -> tuple[int, int, int]:
+    s = val.strip()
+    if s.startswith("#"):
+        s = s[1:]
+    if "," in s:
+        parts = [p.strip() for p in s.split(",")]
+        if len(parts) != 3:
+            raise SystemExit(f"Invalid color '{val}'. Use '#RRGGBB' or 'R,G,B'")
+        try:
+            r, g, b = (int(parts[0]), int(parts[1]), int(parts[2]))
+        except Exception:
+            raise SystemExit(f"Invalid color '{val}'. Components must be integers 0-255")
+        for c in (r, g, b):
+            if c < 0 or c > 255:
+                raise SystemExit(f"Invalid color '{val}'. Components must be 0-255")
+        return (r, g, b)
+    if len(s) == 6:
+        try:
+            r = int(s[0:2], 16)
+            g = int(s[2:4], 16)
+            b = int(s[4:6], 16)
+            return (r, g, b)
+        except Exception:
+            raise SystemExit(f"Invalid color hex '{val}'")
+    raise SystemExit(f"Invalid color '{val}'. Use '#RRGGBB' or 'R,G,B'")
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(description="Compose RimWorld humanlike pawn outfit preview (N,S,E)")
     p.add_argument("--assets-root", required=True, help="Path to Humanlike assets folder (…/Things/Pawn/Humanlike)")
@@ -76,6 +103,15 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--grid-hair", default=None, help="Render a grid sweeping hair offsets relative to head: 'x0:x1:step,y0:y1:step'")
     # Grid exploration for headgear offsets relative to head
     p.add_argument("--grid-headgear", default=None, help="Render a grid sweeping headgear offsets relative to head: 'x0:x1:step,y0:y1:step'")
+    # Colors per category
+    p.add_argument("--color-hair", default=None, help="Hair color (#RRGGBB or R,G,B)")
+    p.add_argument("--color-beard", default=None, help="Beard color (#RRGGBB or R,G,B)")
+    p.add_argument("--color-headgear", default=None, help="Headgear color (#RRGGBB or R,G,B)")
+    p.add_argument("--color-pants", default=None, help="Pants color (#RRGGBB or R,G,B)")
+    p.add_argument("--color-shirt", default=None, help="Shirt color (#RRGGBB or R,G,B)")
+    p.add_argument("--color-outer", default=None, help="Outerwear color (#RRGGBB or R,G,B)")
+    p.add_argument("--color-belt", default=None, help="Belt/pack color (#RRGGBB or R,G,B)")
+    p.add_argument("--color-apparel", default=None, help="Fallback apparel color (#RRGGBB or R,G,B)")
     p.add_argument("--out", required=True, help="Output PNG path")
     return p
 
@@ -127,6 +163,33 @@ def main() -> None:
         if v:
             canvas_offsets[d] = _parse_xy(v)
 
+    # Build default colors and apply overrides
+    colors: dict[str, tuple[int, int, int]] = {
+        "hair": (59, 42, 31),
+        "beard": (59, 42, 31),
+        "headgear": (194, 168, 120),
+        "pants": (58, 74, 90),
+        "shirt": (159, 211, 242),
+        "outer": (47, 62, 92),
+        "belt": (85, 107, 120),
+    }
+    if args.color_hair:
+        colors["hair"] = _parse_color(args.color_hair)
+    if args.color_beard:
+        colors["beard"] = _parse_color(args.color_beard)
+    if args.color_headgear:
+        colors["headgear"] = _parse_color(args.color_headgear)
+    if args.color_pants:
+        colors["pants"] = _parse_color(args.color_pants)
+    if args.color_shirt:
+        colors["shirt"] = _parse_color(args.color_shirt)
+    if args.color_outer:
+        colors["outer"] = _parse_color(args.color_outer)
+    if args.color_belt:
+        colors["belt"] = _parse_color(args.color_belt)
+    if args.color_apparel:
+        colors["apparel"] = _parse_color(args.color_apparel)
+
     if args.grid_head:
         # Force single direction (use the first provided)
         if not dirs:
@@ -161,6 +224,7 @@ def main() -> None:
                     body_offsets=body_offsets or None,
                     head_offsets=local_head_offsets,
                     canvas_offsets=canvas_offsets or None,
+                    colors=colors,
                 )
                 # Overlay label
                 draw = ImageDraw.Draw(im)
@@ -233,6 +297,7 @@ def main() -> None:
                     head_offsets=local_head_offsets or None,
                     hair_offsets_rel=local_hair_offsets_rel,
                     canvas_offsets=canvas_offsets or None,
+                    colors=colors,
                 )
                 # Label with relative hair offset (x,y)
                 draw = ImageDraw.Draw(im)
@@ -302,6 +367,7 @@ def main() -> None:
                     head_offsets=local_head_offsets or None,
                     headgear_offsets_rel=local_headgear_offsets_rel,
                     canvas_offsets=canvas_offsets or None,
+                    colors=colors,
                 )
                 draw = ImageDraw.Draw(im)
                 label = f"({local_headgear_offsets_rel[direction][0]},{local_headgear_offsets_rel[direction][1]})"
@@ -369,6 +435,7 @@ def main() -> None:
             hair_offsets_rel=hair_offsets_rel or None,
             eyes_offsets_rel=eyes_offsets_rel or None,
             canvas_offsets=canvas_offsets or None,
+            colors=colors,
             headgear_offsets_rel=headgear_offsets_rel or None,
         )
         out_path = Path(args.out)

@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Iterable, List, Dict, Tuple
 
-from PIL import Image
+from PIL import Image, ImageOps
 
 from .assets import (
     DIRECTIONS,
@@ -40,6 +40,7 @@ def compose_preview(
     beard_offsets_rel: dict[str, tuple[int, int]] | None = None,
     headgear_offsets_rel: dict[str, tuple[int, int]] | None = None,
     canvas_offsets: dict[str, tuple[int, int]] | None = None,
+    colors: dict[str, tuple[int, int, int]] | None = None,
 ) -> Image.Image:
     dirs = directions or ["north", "south", "east"]
     # Defaults: per-direction head offset, and relative offsets for hair/eyes/headgear w.r.t head
@@ -64,9 +65,9 @@ def compose_preview(
         "north": (0, 0),
         "east": (0, 0),
     }
-    # Hat slightly higher on south; bump by +2 from prior setting
+    # Hat slightly higher on south; bump by +2 from prior -10 to -8
     default_headgear_offsets_rel: Dict[str, Tuple[int, int]] = {
-        "south": (0, -5),
+        "south": (0, -8),
         "north": (0, 0),
         "east": (0, 0),
     }
@@ -81,6 +82,22 @@ def compose_preview(
         if d in defaults:
             return defaults[d]
         return (0, 0)
+
+    def get_color(key: str) -> Tuple[int, int, int] | None:
+        # colors dict supplied by caller; keys: hair, beard, headgear, pants, shirt, outer, belt, apparel
+        if colors and key in colors:
+            return colors[key]
+        return None
+
+    def apply_color(img: Image.Image, rgb: Tuple[int, int, int] | None) -> Image.Image:
+        if not rgb:
+            return img
+        src = img.convert("RGBA")
+        alpha = src.split()[-1]
+        lum = src.convert("L")
+        colored = ImageOps.colorize(lum, black=(0, 0, 0), white=rgb)
+        colored.putalpha(alpha)
+        return colored
 
     frames: List[Image.Image] = []
     for d in dirs:
@@ -111,10 +128,11 @@ def compose_preview(
         # Body apparel on top of body
         for key in ("pants", "shirt", "outer"):
             for img in buckets[key]:
-                place(img, cx, cy)
+                cat_key = key  # direct mapping
+                place(apply_color(img, get_color(cat_key)), cx, cy)
 
         for img in buckets["belt"]:
-            place(img, cx, cy)
+            place(apply_color(img, get_color("belt")), cx, cy)
 
         # Head above body apparel, below hair/hat
         hd = find_head(assets_root, head, d)
@@ -126,7 +144,7 @@ def compose_preview(
         if h:
             hx, hy = get_off(d, head_offsets, default_head_offsets)
             rx, ry = get_off(d, hair_offsets_rel, default_hair_offsets_rel)
-            place(h, cx + hx + rx, cy + hy + ry)
+            place(apply_color(h, get_color("hair")), cx + hx + rx, cy + hy + ry)
 
         # Eyes overlay: center relative to head + per-direction relative delta
         ey = load_eyes(assets_root, eyes, eyes_gender)
@@ -143,16 +161,16 @@ def compose_preview(
         if b:
             hx, hy = get_off(d, head_offsets, default_head_offsets)
             rx, ry = get_off(d, beard_offsets_rel, default_beard_offsets_rel)
-            place(b, cx + hx + rx, cy + hy + ry)
+            place(apply_color(b, get_color("beard")), cx + hx + rx, cy + hy + ry)
 
         for img in buckets["headgear"]:
             hx, hy = get_off(d, head_offsets, default_head_offsets)
             rx, ry = get_off(d, headgear_offsets_rel, default_headgear_offsets_rel)
-            place(img, cx + hx + rx, cy + hy + ry)
+            place(apply_color(img, get_color("headgear")), cx + hx + rx, cy + hy + ry)
 
         # Any uncategorized apparel renders above outer but below headgear
         for img in buckets["apparel"]:
-            place(img, cx, cy)
+            place(apply_color(img, get_color("apparel")), cx, cy)
 
         # Compose without clipping by sizing to placements' extents
         if placements:
