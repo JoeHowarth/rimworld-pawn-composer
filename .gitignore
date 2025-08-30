@@ -1,0 +1,18 @@
+# Local assets (large, personal-use pack)
+free-for-personal-use-rimworld-art/
+
+# Virtual environment
+.venv/
+
+# Python cache
+__pycache__/
+*.pyc
+
+# OS/editor files
+.DS_Store
+.idea/
+.vscode/
+
+# Generated previews (optional to track later)
+preview_examples/
+

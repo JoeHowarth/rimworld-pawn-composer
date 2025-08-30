@@ -1,0 +1,2 @@
+[console_scripts]
+rwpawn-preview = rwpawn.cli:main

@@ -1,0 +1,25 @@
+[project]
+name = "rwpawn"
+version = "0.1.0"
+description = "RimWorld humanlike pawn outfit previewer (PNG + PSD)"
+requires-python = ">=3.10"
+readme = "README.md"
+dependencies = [
+  "pillow>=9.5",
+  "psd-tools>=1.9",
+]
+
+[project.scripts]
+rwpawn-preview = "rwpawn.cli:main"
+
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["rwpawn*"]
+exclude = [
+  "preview_examples*",
+  "free-for-personal-use-rimworld-art*",
+  "tools*",
+]
