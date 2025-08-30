@@ -137,7 +137,7 @@ def compose_preview(
         hd = find_head(assets_root, head, d)
         if hd:
             hx, hy = get_off(d, head_offsets, default_head_offsets)
-            place(hd, cx + hx, cy + hy)
+            place(apply_color(hd, get_color("head")), cx + hx, cy + hy)
 
         h = find_hair(assets_root, hair, d)
         if h:
