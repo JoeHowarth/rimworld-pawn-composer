@@ -57,17 +57,25 @@ def build_parser() -> argparse.ArgumentParser:
     # Offsets (pixels) for alignment; can be per-direction
     p.add_argument("--body-offset", default=None, help="Global body offset 'x,y' applied to all dirs")
     p.add_argument("--head-offset", default=None, help="Global head offset 'x,y' applied to all dirs")
+    p.add_argument("--canvas-offset", default=None, help="Global canvas offset 'x,y' (pads frame and shifts all layers)")
     for d in ("north", "south", "east"):
         p.add_argument(f"--body-offset-{d}", dest=f"body_offset_{d}", default=None, help=f"Body offset for {d} ('x,y')")
         p.add_argument(f"--head-offset-{d}", dest=f"head_offset_{d}", default=None, help=f"Head offset for {d} ('x,y')")
+        p.add_argument(f"--canvas-offset-{d}", dest=f"canvas_offset_{d}", default=None, help=f"Canvas offset for {d} ('x,y')")
     # Relative offsets (added on top of head offset)
     p.add_argument("--hair-offset", default=None, help="Global hair offset relative to head ('x,y')")
     p.add_argument("--eyes-offset", default=None, help="Global eyes offset relative to head ('x,y')")
+    p.add_argument("--headgear-offset", default=None, help="Global headgear offset relative to head ('x,y')")
     for d in ("north", "south", "east"):
         p.add_argument(f"--hair-offset-{d}", dest=f"hair_offset_{d}", default=None, help=f"Hair offset relative to head for {d} ('x,y')")
         p.add_argument(f"--eyes-offset-{d}", dest=f"eyes_offset_{d}", default=None, help=f"Eyes offset relative to head for {d} ('x,y')")
+        p.add_argument(f"--headgear-offset-{d}", dest=f"headgear_offset_{d}", default=None, help=f"Headgear offset relative to head for {d} ('x,y')")
     # Grid exploration for head offsets: "x0:x1:step,y0:y1:step"
     p.add_argument("--grid-head", default=None, help="Render a grid sweeping head offsets: 'x0:x1:step,y0:y1:step' (e.g., -2:2:1,-10:2:2)")
+    # Grid exploration for hair offsets relative to head
+    p.add_argument("--grid-hair", default=None, help="Render a grid sweeping hair offsets relative to head: 'x0:x1:step,y0:y1:step'")
+    # Grid exploration for headgear offsets relative to head
+    p.add_argument("--grid-headgear", default=None, help="Render a grid sweeping headgear offsets relative to head: 'x0:x1:step,y0:y1:step'")
     p.add_argument("--out", required=True, help="Output PNG path")
     return p
 
@@ -95,6 +103,7 @@ def main() -> None:
     # Build offset maps
     body_offsets = {}
     head_offsets = {}
+    canvas_offsets = {}
     if args.body_offset:
         off = _parse_xy(args.body_offset)
         for d in dirs:
@@ -103,6 +112,10 @@ def main() -> None:
         off = _parse_xy(args.head_offset)
         for d in dirs:
             head_offsets[d] = off
+    if args.canvas_offset:
+        off = _parse_xy(args.canvas_offset)
+        for d in dirs:
+            canvas_offsets[d] = off
     for d in ("north", "south", "east"):
         v = getattr(args, f"body_offset_{d}")
         if v:
@@ -110,6 +123,9 @@ def main() -> None:
         v = getattr(args, f"head_offset_{d}")
         if v:
             head_offsets[d] = _parse_xy(v)
+        v = getattr(args, f"canvas_offset_{d}")
+        if v:
+            canvas_offsets[d] = _parse_xy(v)
 
     if args.grid_head:
         # Force single direction (use the first provided)
@@ -144,6 +160,7 @@ def main() -> None:
                     directions=[direction],
                     body_offsets=body_offsets or None,
                     head_offsets=local_head_offsets,
+                    canvas_offsets=canvas_offsets or None,
                 )
                 # Overlay label
                 draw = ImageDraw.Draw(im)
@@ -171,10 +188,149 @@ def main() -> None:
         out_path.parent.mkdir(parents=True, exist_ok=True)
         grid.save(out_path)
         print(f"Wrote grid {out_path} ({grid.size[0]}x{grid.size[1]}), cols={cols}, rows={rows}")
+    elif args.grid_hair:
+        if not args.hair:
+            raise SystemExit("--grid-hair requires --hair to be specified")
+        if not dirs:
+            dirs = ["south"]
+        direction = dirs[0]
+        try:
+            xspec, yspec = args.grid_hair.split(",", 1)
+        except Exception:
+            raise SystemExit("--grid-hair expects 'x0:x1:step,y0:y1:step'")
+        xs = _parse_range(xspec)
+        ys = _parse_range(yspec)
+
+        from PIL import Image, ImageDraw, ImageFont
+
+        tiles = []
+        # Establish base offsets from any provided args
+        base_head_off = head_offsets.get(direction, (0, 0)) if head_offsets else (0, 0)
+        base_hair_rel = (0, 0)
+        if args.hair_offset:
+            base_hair_rel = _parse_xy(args.hair_offset)
+        v = getattr(args, f"hair_offset_{direction}")
+        if v:
+            base_hair_rel = _parse_xy(v)
+
+        for y in ys:
+            for x in xs:
+                # Apply relative hair delta on top of base relative
+                local_head_offsets = dict(head_offsets) if head_offsets else {}
+                local_hair_offsets_rel = {}
+                local_hair_offsets_rel[direction] = (base_hair_rel[0] + x, base_hair_rel[1] + y)
+                im = compose_preview(
+                    assets_root=assets_root,
+                    body_type=args.body_type,
+                    hair=args.hair,
+                    beard=args.beard,
+                    head=default_head,
+                    eyes=args.eyes,
+                    eyes_gender=eyes_gender,
+                    apparels=args.apparel,
+                    directions=[direction],
+                    body_offsets=body_offsets or None,
+                    head_offsets=local_head_offsets or None,
+                    hair_offsets_rel=local_hair_offsets_rel,
+                    canvas_offsets=canvas_offsets or None,
+                )
+                # Label with relative hair offset (x,y)
+                draw = ImageDraw.Draw(im)
+                label = f"({local_hair_offsets_rel[direction][0]},{local_hair_offsets_rel[direction][1]})"
+                try:
+                    font = ImageFont.load_default()
+                except Exception:
+                    font = None
+                bbox_w, bbox_h = draw.textbbox((0, 0), label, font=font)[2:]
+                pad = 2
+                draw.rectangle([0, 0, bbox_w + 2 * pad, bbox_h + 2 * pad], fill=(0, 0, 0, 128))
+                draw.text((pad, pad), label, fill=(255, 255, 255, 255), font=font, stroke_width=1, stroke_fill=(0, 0, 0, 255))
+                tiles.append(im)
+
+        cols, rows = len(xs), len(ys)
+        grid = Image.new("RGBA", (128 * cols, 128 * rows), (0, 0, 0, 0))
+        idx = 0
+        for r in range(rows):
+            for c in range(cols):
+                grid.alpha_composite(tiles[idx], (c * 128, r * 128))
+                idx += 1
+        out_path = Path(args.out)
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        grid.save(out_path)
+        print(f"Wrote grid {out_path} ({grid.size[0]}x{grid.size[1]}), cols={cols}, rows={rows}")
+    elif args.grid_headgear:
+        if not any(a for a in args.apparel):
+            raise SystemExit("--grid-headgear requires at least one headgear item passed via --apparel (e.g., CowboyHat)")
+        if not dirs:
+            dirs = ["south"]
+        direction = dirs[0]
+        try:
+            xspec, yspec = args.grid_headgear.split(",", 1)
+        except Exception:
+            raise SystemExit("--grid-headgear expects 'x0:x1:step,y0:y1:step'")
+        xs = _parse_range(xspec)
+        ys = _parse_range(yspec)
+
+        from PIL import Image, ImageDraw, ImageFont
+
+        tiles = []
+        base_head_off = head_offsets.get(direction, (0, 0)) if head_offsets else (0, 0)
+        # Determine current base headgear relative offset if provided
+        base_headgear_rel = (0, 0)
+        if args.headgear_offset:
+            base_headgear_rel = _parse_xy(args.headgear_offset)
+        v = getattr(args, f"headgear_offset_{direction}")
+        if v:
+            base_headgear_rel = _parse_xy(v)
+
+        for y in ys:
+            for x in xs:
+                local_head_offsets = dict(head_offsets) if head_offsets else {}
+                local_headgear_offsets_rel = {}
+                local_headgear_offsets_rel[direction] = (base_headgear_rel[0] + x, base_headgear_rel[1] + y)
+                im = compose_preview(
+                    assets_root=assets_root,
+                    body_type=args.body_type,
+                    hair=args.hair,
+                    beard=args.beard,
+                    head=default_head,
+                    eyes=args.eyes,
+                    eyes_gender=eyes_gender,
+                    apparels=args.apparel,
+                    directions=[direction],
+                    body_offsets=body_offsets or None,
+                    head_offsets=local_head_offsets or None,
+                    headgear_offsets_rel=local_headgear_offsets_rel,
+                    canvas_offsets=canvas_offsets or None,
+                )
+                draw = ImageDraw.Draw(im)
+                label = f"({local_headgear_offsets_rel[direction][0]},{local_headgear_offsets_rel[direction][1]})"
+                try:
+                    font = ImageFont.load_default()
+                except Exception:
+                    font = None
+                bbox_w, bbox_h = draw.textbbox((0, 0), label, font=font)[2:]
+                pad = 2
+                draw.rectangle([0, 0, bbox_w + 2 * pad, bbox_h + 2 * pad], fill=(0, 0, 0, 128))
+                draw.text((pad, pad), label, fill=(255, 255, 255, 255), font=font, stroke_width=1, stroke_fill=(0, 0, 0, 255))
+                tiles.append(im)
+
+        cols, rows = len(xs), len(ys)
+        grid = Image.new("RGBA", (128 * cols, 128 * rows), (0, 0, 0, 0))
+        idx = 0
+        for r in range(rows):
+            for c in range(cols):
+                grid.alpha_composite(tiles[idx], (c * 128, r * 128))
+                idx += 1
+        out_path = Path(args.out)
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        grid.save(out_path)
+        print(f"Wrote grid {out_path} ({grid.size[0]}x{grid.size[1]}), cols={cols}, rows={rows}")
     else:
         # Relative layer offsets
         hair_offsets_rel = {}
         eyes_offsets_rel = {}
+        headgear_offsets_rel = {}
         if args.hair_offset:
             off = _parse_xy(args.hair_offset)
             for d in dirs:
@@ -183,6 +339,10 @@ def main() -> None:
             off = _parse_xy(args.eyes_offset)
             for d in dirs:
                 eyes_offsets_rel[d] = off
+        if args.headgear_offset:
+            off = _parse_xy(args.headgear_offset)
+            for d in dirs:
+                headgear_offsets_rel[d] = off
         for d in ("north", "south", "east"):
             v = getattr(args, f"hair_offset_{d}")
             if v:
@@ -190,6 +350,9 @@ def main() -> None:
             v = getattr(args, f"eyes_offset_{d}")
             if v:
                 eyes_offsets_rel[d] = _parse_xy(v)
+            v = getattr(args, f"headgear_offset_{d}")
+            if v:
+                headgear_offsets_rel[d] = _parse_xy(v)
 
         img = compose_preview(
             assets_root=assets_root,
@@ -205,6 +368,8 @@ def main() -> None:
             head_offsets=head_offsets or None,
             hair_offsets_rel=hair_offsets_rel or None,
             eyes_offsets_rel=eyes_offsets_rel or None,
+            canvas_offsets=canvas_offsets or None,
+            headgear_offsets_rel=headgear_offsets_rel or None,
         )
         out_path = Path(args.out)
         out_path.parent.mkdir(parents=True, exist_ok=True)
